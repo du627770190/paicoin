@@ -2100,18 +2100,18 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
     }
 
     // auto stakeNode = *FetchStakeNode(pindex, chainparams.GetConsensus());
-    if(pindex->GetStakePos().IsNull()){
-        CDiskBlockPos _pos;
+    // if(pindex->GetStakePos().IsNull()){
+    //     CDiskBlockPos _pos;
 
-        if (!FindStakePos(state, pindex->nFile, _pos, ::GetSerializeSize(*pindex->pstakeNode, SER_DISK, CLIENT_VERSION) + 40))
-            return error("ConnectBlock(): FindStakePos failed");
-        if (!StakeWriteToDisk(*pindex->pstakeNode, _pos, pindex->pprev == nullptr ? uint256() : pindex->pprev->GetBlockHash(), chainparams.MessageStart()))
-            return AbortNode(state, "Failed to write stake data");
+    //     if (!FindStakePos(state, pindex->nFile, _pos, ::GetSerializeSize(*pindex->pstakeNode, SER_DISK, CLIENT_VERSION) + 40))
+    //         return error("ConnectBlock(): FindStakePos failed");
+    //     if (!StakeWriteToDisk(*pindex->pstakeNode, _pos, pindex->pprev == nullptr ? uint256() : pindex->pprev->GetBlockHash(), chainparams.MessageStart()))
+    //         return AbortNode(state, "Failed to write stake data");
 
-        // update nStakePos in block index
-        pindex->nStakePos = _pos.nPos;
-        pindex->nStatus |= BLOCK_HAVE_STAKE;
-    }
+    //     // update nStakePos in block index
+    //     pindex->nStakePos = _pos.nPos;
+    //     pindex->nStatus |= BLOCK_HAVE_STAKE;
+    // }
 
     if (fTxIndex)
         if (!pblocktree->WriteTxIndex(vPosTxid))
@@ -3715,12 +3715,12 @@ static bool AcceptBlock(const std::shared_ptr<const CBlock>& pblock, CValidation
     if (fCheckForPruning)
         FlushStateToDisk(chainparams, state, FLUSH_STATE_NONE); // we just allocated more disk space for block files
 
-    if (pindex->pprev == nullptr) {
-        pindex->pstakeNode = StakeNode::genesisNode(chainparams.GetConsensus());
-    }
-    else{
-        pindex->pstakeNode = FetchStakeNode(pindex, chainparams.GetConsensus() );
-    }
+    // if (pindex->pprev == nullptr) {
+    //     pindex->pstakeNode = StakeNode::genesisNode(chainparams.GetConsensus());
+    // }
+    // else{
+    //     pindex->pstakeNode = FetchStakeNode(pindex, chainparams.GetConsensus() );
+    // }
 
     return true;
 }
