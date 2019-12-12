@@ -21,7 +21,6 @@
 
 bool IsExpiredTx(const CTransaction &tx, int nBlockHeight)
 {
-    assert(tx.nExpiry == 0);
     return tx.nExpiry != 0 && (uint32_t)nBlockHeight >= tx.nExpiry;
 }
 

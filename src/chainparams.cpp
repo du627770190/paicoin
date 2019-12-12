@@ -567,8 +567,8 @@ public:
         consensus.nStakeDiffWindows            = 8;
         consensus.nStakeVersionInterval        = 8 * 2 * 7; // ~1 week
         consensus.nMaxFreshStakePerBlock       = 4 * consensus.nTicketsPerBlock;
-        consensus.nStakeEnabledHeight          = 1000;//141;//consensus.nCoinbaseMaturity + consensus.nTicketMaturity;
-        consensus.nStakeValidationHeight       = 1100;//200;//consensus.nCoinbaseMaturity + (consensus.nTicketPoolSize * 2);
+        consensus.nStakeEnabledHeight          = 2000;//141;//consensus.nCoinbaseMaturity + consensus.nTicketMaturity;
+        consensus.nStakeValidationHeight       = 2100;//200;//consensus.nCoinbaseMaturity + (consensus.nTicketPoolSize * 2);
         consensus.stakeBaseSigScript           = CScript();//[]byte{0x30, 0x57};
         consensus.nStakeMajorityMultiplier     = 3;
         consensus.nStakeMajorityDivisor        = 4;
