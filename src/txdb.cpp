@@ -13,6 +13,7 @@
 #include "util.h"
 #include "ui_interface.h"
 #include "init.h"
+#include "validation.h"
 
 #include <stdint.h>
 
@@ -334,6 +335,17 @@ bool CBlockTreeDB::LoadBlockIndexGuts(const Consensus::Params& consensusParams, 
                 pindexNew->ticketLotteryState = diskindex.ticketLotteryState;
                 pindexNew->nStatus        = diskindex.nStatus;
                 pindexNew->nTx            = diskindex.nTx;
+
+                if (pindexNew->nHeight == 0) {
+                    assert(pindexNew->pprev == nullptr);
+                    pindexNew->pstakeNode = StakeNode::genesisNode(consensusParams);
+                }
+                else{
+                    assert(pindexNew->pprev != nullptr);
+                    assert(pindexNew->pprev->pstakeNode != nullptr);
+
+                    pindexNew->pstakeNode = FetchStakeNode(pindexNew, consensusParams );
+                }
 
                 if (!CheckProofOfWork(pindexNew->GetBlockHash(), pindexNew->nBits, consensusParams))
                     return error("%s: CheckProofOfWork failed: %s", __func__, pindexNew->ToString());
