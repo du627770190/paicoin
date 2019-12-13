@@ -3717,11 +3717,7 @@ static bool AcceptBlock(const std::shared_ptr<const CBlock>& pblock, CValidation
 
     assert(pindex->pprev != nullptr);
     assert(pindex->pprev->pstakeNode != nullptr);
-    //     pindex->pstakeNode = StakeNode::genesisNode(chainparams.GetConsensus());
-    // }
-    // else{
-        pindex->pstakeNode = FetchStakeNode(pindex, chainparams.GetConsensus() );
-    // }
+    pindex->pstakeNode = FetchStakeNode(pindex, chainparams.GetConsensus() );
 
     return true;
 }
@@ -4047,6 +4043,18 @@ bool static LoadBlockIndexDB(const CChainParams& chainparams)
             pindex->BuildSkip();
         if (pindex->IsValid(BLOCK_VALID_TREE) && (pindexBestHeader == nullptr || CBlockIndexWorkComparator()(pindexBestHeader, pindex)))
             pindexBestHeader = pindex;
+
+        if (pindex->nHeight == 0) {
+            assert(pindex->pprev == nullptr);
+            pindex->pstakeNode = StakeNode::genesisNode(chainparams.GetConsensus());
+        }
+        else{
+            assert(pindex->pprev != nullptr);
+            assert(pindex->pprev->pstakeNode != nullptr);
+
+            pindex->pstakeNode = FetchStakeNode(pindex, chainparams.GetConsensus() );
+        }
+
     }
 
     // Load block file info
