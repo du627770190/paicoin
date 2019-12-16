@@ -3715,9 +3715,13 @@ static bool AcceptBlock(const std::shared_ptr<const CBlock>& pblock, CValidation
     if (fCheckForPruning)
         FlushStateToDisk(chainparams, state, FLUSH_STATE_NONE); // we just allocated more disk space for block files
 
-    assert(pindex->pprev != nullptr);
-    assert(pindex->pprev->pstakeNode != nullptr);
-    pindex->pstakeNode = FetchStakeNode(pindex, chainparams.GetConsensus() );
+    if (pindex->pprev != nullptr)
+        pindex->pstakeNode = FetchStakeNode(pindex, chainparams.GetConsensus());
+    else {
+        //TODO understand why pstakeNode can be null here
+        LogPrintf("In %s pstakenode is null on height %d\n", __func__, nHeight);
+        pindex->pstakeNode = StakeNode::genesisNode(chainparams.GetConsensus());
+    }
 
     return true;
 }
