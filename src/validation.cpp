@@ -2099,7 +2099,16 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
         setDirtyBlockIndex.insert(pindex);
     }
 
-    // auto stakeNode = *FetchStakeNode(pindex, chainparams.GetConsensus());
+    if (pindex->nHeight == 0) {
+        assert(pindex->pprev == nullptr);
+        pindex->pstakeNode = StakeNode::genesisNode(chainparams.GetConsensus());
+    }
+    else{
+        assert(pindex->pprev != nullptr);
+        assert(pindex->pprev->pstakeNode != nullptr);
+
+        pindex->pstakeNode = FetchStakeNode(pindex, chainparams.GetConsensus() );
+    }
     // if(pindex->GetStakePos().IsNull()){
     //     CDiskBlockPos _pos;
 
@@ -3715,14 +3724,6 @@ static bool AcceptBlock(const std::shared_ptr<const CBlock>& pblock, CValidation
     if (fCheckForPruning)
         FlushStateToDisk(chainparams, state, FLUSH_STATE_NONE); // we just allocated more disk space for block files
 
-    if (pindex->pprev != nullptr)
-        pindex->pstakeNode = FetchStakeNode(pindex, chainparams.GetConsensus());
-    else {
-        //TODO understand why pstakeNode can be null here
-        LogPrintf("In %s pstakenode is null on height %d\n", __func__, nHeight);
-        pindex->pstakeNode = StakeNode::genesisNode(chainparams.GetConsensus());
-    }
-
     return true;
 }
 
@@ -4058,7 +4059,6 @@ bool static LoadBlockIndexDB(const CChainParams& chainparams)
 
             pindex->pstakeNode = FetchStakeNode(pindex, chainparams.GetConsensus() );
         }
-
     }
 
     // Load block file info
@@ -4206,12 +4206,12 @@ bool CVerifyDB::VerifyDB(const CChainParams& chainparams, CCoinsView *coinsview,
                 if (!UndoReadFromDisk(undo, pos, pindex->pprev->GetBlockHash()))
                     return error("VerifyDB(): *** found bad undo data at %d, hash=%s\n", pindex->nHeight, pindex->GetBlockHash().ToString());
             }
-            StakeNode stake(chainparams.GetConsensus());
-            pos = pindex->GetStakePos();
-            if (!pos.IsNull()) {
-                if (!StakeReadFromDisk(stake, pos, pindex->pprev->GetBlockHash()))
-                    return error("VerifyDB(): *** found bad stake data at %d, hash=%s\n", pindex->nHeight, pindex->GetBlockHash().ToString());
-            }
+            // StakeNode stake(chainparams.GetConsensus());
+            // pos = pindex->GetStakePos();
+            // if (!pos.IsNull()) {
+            //     if (!StakeReadFromDisk(stake, pos, pindex->pprev->GetBlockHash()))
+            //         return error("VerifyDB(): *** found bad stake data at %d, hash=%s\n", pindex->nHeight, pindex->GetBlockHash().ToString());
+            // }
         }
         // check level 3: check for inconsistencies during memory-only disconnect of tip blocks
         if (nCheckLevel >= 3 && pindex == pindexState && (coins.DynamicMemoryUsage() + pcoinsTip->DynamicMemoryUsage()) <= nCoinCacheUsage) {
@@ -4506,20 +4506,20 @@ bool LoadGenesisBlock(const CChainParams& chainparams)
         CBlockIndex *pindex = AddToBlockIndex(block);
         CValidationState state;
         assert (pindex->pprev == nullptr);
-        pindex->pstakeNode = StakeNode::genesisNode(chainparams.GetConsensus());
-        assert(pindex->pstakeNode != nullptr);
-        assert(pindex->GetStakePos().IsNull());
-        {
-            // Start new stake file
-            CDiskBlockPos _pos;
-            if (!FindStakePos(state, pindex->nFile, _pos, ::GetSerializeSize(*pindex->pstakeNode, SER_DISK, CLIENT_VERSION) + 40))
-                return error("%s: FindStakePos failed", __func__);
-            if (!StakeWriteToDisk(*pindex->pstakeNode, _pos, uint256(), chainparams.MessageStart()))
-                return error("%s: writing stake data for genesis block to disk failed", __func__);
-            // update nStakePos in block index
-            pindex->nStakePos = _pos.nPos;
-            pindex->nStatus |= BLOCK_HAVE_STAKE;
-        }
+        // pindex->pstakeNode = StakeNode::genesisNode(chainparams.GetConsensus());
+        // assert(pindex->pstakeNode != nullptr);
+        // assert(pindex->GetStakePos().IsNull());
+        // {
+        //     // Start new stake file
+        //     CDiskBlockPos _pos;
+        //     if (!FindStakePos(state, pindex->nFile, _pos, ::GetSerializeSize(*pindex->pstakeNode, SER_DISK, CLIENT_VERSION) + 40))
+        //         return error("%s: FindStakePos failed", __func__);
+        //     if (!StakeWriteToDisk(*pindex->pstakeNode, _pos, uint256(), chainparams.MessageStart()))
+        //         return error("%s: writing stake data for genesis block to disk failed", __func__);
+        //     // update nStakePos in block index
+        //     pindex->nStakePos = _pos.nPos;
+        //     pindex->nStatus |= BLOCK_HAVE_STAKE;
+        // }
         // Start new block file
         unsigned int nBlockSize = ::GetSerializeSize(block, SER_DISK, CLIENT_VERSION);
         CDiskBlockPos blockPos;
