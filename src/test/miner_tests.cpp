@@ -959,7 +959,7 @@ BOOST_FIXTURE_TEST_CASE( CreateNewBlock_stake_REGTEST, TestChain100Setup_p2pkh)
     const CChainParams& chainparams = Params();
     const auto& stakeEnabledHeight = chainparams.GetConsensus().nStakeEnabledHeight;
     const auto& stakeValidationHeight = chainparams.GetConsensus().nStakeValidationHeight;
-    const auto& minimumStakeDiff = chainparams.GetConsensus().nMinimumStakeDiff;
+    const auto& minimumStakeDiff = chainparams.GetConsensus().nMinimumStakeDiff + 2e4;
     const auto& ticketMaturity = chainparams.GetConsensus().nTicketMaturity;
     const auto& ticketExpiry = chainparams.GetConsensus().nTicketExpiry;
     const auto& maxFreshTicketsPerBlock = chainparams.GetConsensus().nMaxFreshStakePerBlock;
@@ -1062,16 +1062,13 @@ BOOST_FIXTURE_TEST_CASE( CreateNewBlock_stake_REGTEST, TestChain100Setup_p2pkh)
     BOOST_CHECK_LE(test_ticket_contributions.size(), maxFreshTicketsPerBlock);
 
     auto spendCoinbaseIndex = 0UL;
-    auto vBuyTicketTxs = std::vector<CMutableTransaction>{};
     auto vBoughtTickets = std::map<uint256, CAmount>{};
 
     auto BuyTestTickets = [&](const CAmount& ticketPrice, const std::vector<CAmount> contributions) {
-        vBuyTicketTxs.clear();
         BOOST_CHECK_LT(spendCoinbaseIndex, coinbaseTxns.size());
         CMutableTransaction txBuyTicketFromCoinbase =
             CreateDummyBuyTicket(coinbaseTxns[spendCoinbaseIndex++], 0, ticketPrice, scriptPubKeyStake, ticketPrice+contributions[0], rewardAddr, changeAddr);
         SignTx(txBuyTicketFromCoinbase,0,scriptPubKeyCoinbase,coinbaseKey);
-        vBuyTicketTxs.push_back(txBuyTicketFromCoinbase);
         vBoughtTickets[txBuyTicketFromCoinbase.GetHash()] = ticketPrice;
         mempool.addUnchecked(txBuyTicketFromCoinbase.GetHash(), entry.Fee(ZEROFEE).SpendsCoinbase(true).FromTx(txBuyTicketFromCoinbase));
 
@@ -1081,7 +1078,6 @@ BOOST_FIXTURE_TEST_CASE( CreateNewBlock_stake_REGTEST, TestChain100Setup_p2pkh)
             CMutableTransaction txBuyTicket =
                 CreateDummyBuyTicket(nextToSpendTx, ticketChangeOutputIndex, ticketPrice, scriptPubKeyStake, ticketPrice+contributions[i], rewardAddr, changeAddr);
             SignTx(txBuyTicket,0,scriptPubKeyChange,changeKey);
-            vBuyTicketTxs.push_back(txBuyTicket);
             vBoughtTickets[txBuyTicket.GetHash()] = ticketPrice;
             mempool.addUnchecked(txBuyTicket.GetHash(), entry.Fee(ZEROFEE).SpendsCoinbase(false).FromTx(txBuyTicket)); 
 
@@ -1096,7 +1092,7 @@ BOOST_FIXTURE_TEST_CASE( CreateNewBlock_stake_REGTEST, TestChain100Setup_p2pkh)
     while (chainActive.Tip()->nHeight < firstBuyTicketMatureHeight) {
         BuyTestTickets(minimumStakeDiff, test_ticket_contributions);
         // actually add the block containing tickets as tip
-        const auto& blockWithTickets = CreateAndProcessBlock(vBuyTicketTxs, scriptPubKeyCoinbase);
+        const auto& blockWithTickets = ProcessTemplateBlock(pblocktemplate->block);
         BOOST_CHECK(chainActive.Tip()->GetBlockHash() == blockWithTickets.GetHash());
         coinbaseTxns.push_back(*blockWithTickets.vtx[0]);
     }
@@ -1109,7 +1105,7 @@ BOOST_FIXTURE_TEST_CASE( CreateNewBlock_stake_REGTEST, TestChain100Setup_p2pkh)
     while (chainActive.Tip()->nHeight <  stakeValidationHeight - 1) {
         // continue purchasing tickets until coinbase txs have been spend
         BuyTestTickets(minimumStakeDiff, test_ticket_contributions);
-        const auto& blockWithTickets = CreateAndProcessBlock(vBuyTicketTxs, scriptPubKeyCoinbase);
+        const auto& blockWithTickets = ProcessTemplateBlock(pblocktemplate->block);
         BOOST_CHECK(chainActive.Tip()->GetBlockHash() == blockWithTickets.GetHash());
         coinbaseTxns.push_back(*blockWithTickets.vtx[0]);
         numberLiveTickets += test_ticket_contributions.size();
@@ -1119,17 +1115,19 @@ BOOST_FIXTURE_TEST_CASE( CreateNewBlock_stake_REGTEST, TestChain100Setup_p2pkh)
     BOOST_CHECK_EQUAL(chainActive.Tip()->pstakeNode->LiveTickets().size(), numberLiveTickets);
 
     {
-        const auto& subsidy = GetVoterSubsidy(chainActive.Tip()->nHeight, Params().GetConsensus());
-        const auto& reward = CalcContributorRemuneration(test_ticket_contributions[0], minimumStakeDiff, subsidy, test_ticket_contributions[0]);
-        // create all needed transaction to obtain a block after stakeValidationHeight
         const auto& blockHeightToVoteOn = chainActive.Tip()->nHeight;
         const auto& blockHashToVoteOn = chainActive.Tip()->GetBlockHash();
         const auto& winningHashes = chainActive.Tip()->pstakeNode->Winners();
-
+        const auto& subsidy = GetVoterSubsidy(chainActive.Tip()->nHeight + 1/*spend Height*/, Params().GetConsensus());
+        // create all needed transaction to obtain a block after stakeValidationHeight
         BOOST_CHECK_EQUAL(winningHashes.size(), WINNERS_PER_BLOCK);
         // we will use 3 winners, thus 2 will be missed
         // add some good votes using the winning hashes and the hash of the tip
         for (auto i = 0; i < VOTES_PER_BLOCK; ++i) {
+            const auto& ticketPriceAtPurchase = vBoughtTickets[winningHashes[i]];
+            const auto& contributedAmount = ticketPriceAtPurchase + test_ticket_contributions[0];
+            // recalculated reward
+            const auto& reward = CalcContributorRemuneration( contributedAmount, ticketPriceAtPurchase, subsidy, contributedAmount);
             CMutableTransaction txVote = CreateDummyVote(winningHashes[i], blockHashToVoteOn, blockHeightToVoteOn, rewardAddr, reward);
             SignTx(txVote, voteStakeInputIndex, scriptPubKeyStake, stakeKey);
             mempool.addUnchecked(txVote.GetHash(), entry.Fee(ZEROFEE).FromTx(txVote));
@@ -1137,6 +1135,7 @@ BOOST_FIXTURE_TEST_CASE( CreateNewBlock_stake_REGTEST, TestChain100Setup_p2pkh)
 
         // add some bad votes
         // vote using dummy ticket hash
+        const auto& reward = CalcContributorRemuneration(test_ticket_contributions[0], minimumStakeDiff, subsidy, test_ticket_contributions[0]);
         CMutableTransaction txBadVote1 = CreateDummyVote(uint256(), blockHashToVoteOn, blockHeightToVoteOn, rewardAddr, reward);
         SignTx(txBadVote1, voteStakeInputIndex, scriptPubKeyStake, stakeKey);
         mempool.addUnchecked(txBadVote1.GetHash(), entry.Fee(ZEROFEE).FromTx(txBadVote1));
@@ -1166,8 +1165,6 @@ BOOST_FIXTURE_TEST_CASE( CreateNewBlock_stake_REGTEST, TestChain100Setup_p2pkh)
         const auto& blockHashToVoteOn = chainActive.Tip()->GetBlockHash();
         const auto& winningHashes = chainActive.Tip()->pstakeNode->Winners();
 
-        // difficulty increased since we are above stakeValidationHeight
-        const auto& ticketPrice = 1*COIN;
         const auto& subsidy = GetVoterSubsidy(chainActive.Tip()->nHeight+1 /*spend height*/, Params().GetConsensus());
 
         BOOST_CHECK_EQUAL(winningHashes.size(), WINNERS_PER_BLOCK);
@@ -1201,6 +1198,8 @@ BOOST_FIXTURE_TEST_CASE( CreateNewBlock_stake_REGTEST, TestChain100Setup_p2pkh)
             mempool.addUnchecked(txRevokeTicket.GetHash(), entry.Fee(ZEROFEE).SpendsCoinbase(true).FromTx(txRevokeTicket));
         }
 
+        // difficulty increased since we are above stakeValidationHeight
+        const auto& ticketPrice = 1*COIN;
         BuyTestTickets(ticketPrice, test_ticket_contributions);
 
         // actually add the block using valid votes as tip

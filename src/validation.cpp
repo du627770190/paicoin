@@ -1135,7 +1135,7 @@ CAmount GetMinerSubsidy(int nHeight, const Consensus::Params& consensusParams)
 CAmount GetVoterSubsidy(int nHeight, const Consensus::Params& consensusParams)
 {
     // Voter subsidy is a portion of total block subsidy
-    return nHeight + 1 < consensusParams.nStakeValidationHeight ? 0 :
+    return nHeight < consensusParams.nStakeValidationHeight ? 0 :
         (GetTotalBlockSubsidy(nHeight, consensusParams) * consensusParams.nStakeSubsidyProportion)
         / (consensusParams.TotalSubsidyProportions() * consensusParams.nTicketsPerBlock);
 }
